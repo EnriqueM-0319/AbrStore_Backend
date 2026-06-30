@@ -1,0 +1,363 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type AuthUser {
+  active: Boolean!
+  email: String!
+  fullName: String!
+  id: String!
+  phone: String!
+  role: Role!
+  username: String
+}
+
+type BasicUser {
+  email: String!
+  fullName: String!
+  id: String!
+}
+
+type CashMovement {
+  amount: Float!
+  cashSessionId: String!
+  createdAt: String!
+  createdBy: BasicUser!
+  description: String!
+  id: String!
+  type: CashMovementType!
+}
+
+enum CashMovementType {
+  ADJUSTMENT
+  CASH_IN
+  EXPENSE
+  SUPPLIER_PAYMENT
+  WITHDRAWAL
+}
+
+type CashRegisterCloseResult {
+  session: CashRegisterSession!
+  summary: CashRegisterSummary!
+}
+
+type CashRegisterSession {
+  closedAt: String
+  closedBy: BasicUser
+  closingAmount: Float
+  difference: Float
+  expectedAmount: Float
+  id: String!
+  notes: String
+  openedAt: String!
+  openedBy: BasicUser!
+  openingAmount: Float!
+  status: CashRegisterStatus!
+}
+
+enum CashRegisterStatus {
+  CLOSED
+  OPEN
+}
+
+type CashRegisterSummary {
+  adjustmentTotal: Float!
+  cardSalesTotal: Float!
+  cashInTotal: Float!
+  cashOutTotal: Float!
+  cashSalesCount: Int!
+  cashSalesTotal: Float!
+  creditSalesTotal: Float!
+  expectedAmount: Float!
+  expenseTotal: Float!
+  nonCashSalesTotal: Float!
+  openingAmount: Float!
+  supplierPaymentTotal: Float!
+  transferSalesTotal: Float!
+  withdrawalTotal: Float!
+}
+
+input CloseCashRegisterInput {
+  closingAmount: Float!
+  notes: String
+}
+
+input CreateCashMovementInput {
+  amount: Float!
+  description: String!
+  type: CashMovementType!
+}
+
+input CreateSaleInput {
+  cashReceived: Float
+  creditCustomerName: String
+  creditNote: String
+  items: [SaleRequestItemInput!]!
+  paymentMethod: PaymentMethod
+}
+
+type HeldTicket {
+  createdAt: String!
+  createdBy: BasicUser!
+  id: String!
+  itemCount: Float!
+  items: [HeldTicketItem!]!
+  note: String
+  paymentMethod: PaymentMethod!
+  total: Float!
+  updatedAt: String!
+}
+
+type HeldTicketItem {
+  description: String
+  id: String!
+  lineTotal: Float!
+  name: String!
+  product: Product
+  productId: String
+  quantity: Float!
+  sku: String!
+  unit: UnitType!
+  unitPrice: Float!
+}
+
+input LoginInput {
+  password: String!
+  username: String!
+}
+
+type Mutation {
+  cancelSale(id: String!, reason: String!): SaleTicket!
+  cancelSaleItem(id: String!, itemId: String!, reason: String!): SaleTicket!
+  closeCashRegister(input: CloseCashRegisterInput!): CashRegisterCloseResult!
+  createCashMovement(input: CreateCashMovementInput!): CashMovement!
+  createHeldTicket(input: CreateSaleInput!, note: String): HeldTicket!
+  createProduct(input: ProductInput!): Product!
+  createSale(input: CreateSaleInput!): SaleTicket!
+  createStockExit(note: String, productId: String!, quantity: Float!, reason: StockExitReason!): StockExit!
+  deactivateUser(id: String!): AuthUser!
+  deleteHeldTicket(id: String!): OkResult!
+  deleteProduct(id: String!, permanent: Boolean): OkResult!
+  login(input: LoginInput!): AuthUser!
+  logout: OkResult!
+  openCashRegister(input: OpenCashRegisterInput!): CashRegisterSession!
+  payReceivable(cashReceived: Float, id: String!, paymentMethod: PaymentMethod): SaleTicket!
+  registerUser(input: RegisterUserInput!): AuthUser!
+  updateProduct(id: String!, input: ProductInput!): Product!
+  updateUser(id: String!, input: UpdateUserInput!): AuthUser!
+}
+
+type OkResult {
+  ok: Boolean!
+}
+
+input OpenCashRegisterInput {
+  notes: String
+  openingAmount: Float!
+}
+
+type PaginatedCashMovements {
+  items: [CashMovement!]!
+  limit: Int!
+  page: Int!
+  pageCount: Int!
+  total: Int!
+}
+
+type PaginatedProducts {
+  items: [Product!]!
+  limit: Int!
+  page: Int!
+  pageCount: Int!
+  total: Int!
+}
+
+type PaginatedSales {
+  items: [SaleTicket!]!
+  limit: Int!
+  page: Int!
+  pageCount: Int!
+  total: Int!
+}
+
+type PaginatedStockExits {
+  items: [StockExit!]!
+  limit: Int!
+  page: Int!
+  pageCount: Int!
+  total: Int!
+}
+
+enum PaymentMethod {
+  CARD
+  CASH
+  CREDIT
+  TRANSFER
+}
+
+type Product {
+  active: Boolean
+  costPrice: Float
+  description: String
+  id: String!
+  name: String!
+  price: Float!
+  profitMargin: Float
+  sku: String!
+  stock: Float!
+  unit: UnitType!
+}
+
+input ProductInput {
+  active: Boolean
+  costPrice: Float!
+  description: String
+  name: String!
+  price: Float!
+  profitMargin: Float!
+  sku: String!
+  stock: Float!
+  unit: UnitType!
+}
+
+type Query {
+  cashMovements(currentOnly: Boolean, limit: Float, page: Float): PaginatedCashMovements!
+  cashRegisterSummary: CashRegisterSummary
+  currentCashRegister: CashRegisterSession
+  heldTickets: [HeldTicket!]!
+  inventory(limit: Float, lowStock: Boolean, page: Float, search: String): PaginatedProducts!
+  manageProducts: [Product!]!
+  me: AuthUser!
+  products(search: String): [Product!]!
+  receivables(limit: Float, page: Float, status: String): PaginatedSales!
+  sales(endDate: String, folio: Float, limit: Float, page: Float, startDate: String): PaginatedSales!
+  salesReport(endDate: String, groupBy: String, startDate: String): SalesReport!
+  stockExits(limit: Float, page: Float): PaginatedStockExits!
+  users(search: String): [AuthUser!]!
+}
+
+input RegisterUserInput {
+  email: String!
+  fullName: String!
+  password: String!
+  phone: String!
+  role: Role
+}
+
+enum Role {
+  ADMIN
+  SUPERADMIN
+  WORKER
+}
+
+type SaleCashSession {
+  id: String!
+  openedAt: String!
+  status: CashRegisterStatus!
+}
+
+type SaleItem {
+  cancelReason: String
+  canceledAt: String
+  description: String
+  id: String!
+  lineTotal: Float!
+  name: String!
+  productId: String
+  quantity: Float!
+  sku: String!
+  unit: UnitType!
+  unitPrice: Float!
+}
+
+input SaleRequestItemInput {
+  manual: Boolean
+  name: String
+  price: Float
+  productId: String
+  quantity: Float
+  unit: UnitType
+}
+
+type SaleTicket {
+  canCancel: Boolean!
+  cancelReason: String
+  canceledAt: String
+  canceledBy: BasicUser
+  cashReceived: Float
+  cashSession: SaleCashSession
+  changeDue: Float
+  createdAt: String!
+  creditCustomerName: String
+  creditNote: String
+  creditPaidAt: String
+  creditPaidBy: BasicUser
+  creditPaymentMethod: PaymentMethod
+  folio: Int!
+  id: String!
+  itemCount: Float!
+  items: [SaleItem!]!
+  paymentMethod: PaymentMethod!
+  paymentTotal: Float!
+  seller: BasicUser!
+  total: Float!
+}
+
+type SalesReport {
+  endDate: String!
+  groupBy: String!
+  items: [SalesReportItem!]!
+  startDate: String!
+  summary: SalesReportItem!
+}
+
+type SalesReportItem {
+  averageTicket: Float!
+  canceledCount: Int!
+  cardTotal: Float!
+  cashTotal: Float!
+  creditCollectedCardTotal: Float!
+  creditCollectedCashTotal: Float!
+  creditCollectedTotal: Float!
+  creditCollectedTransferTotal: Float!
+  creditPaidTotal: Float!
+  creditPendingTotal: Float!
+  creditTotal: Float!
+  grossTotal: Float!
+  period: String!
+  salesCount: Int!
+  transferTotal: Float!
+}
+
+type StockExit {
+  createdAt: String!
+  description: String
+  id: String!
+  name: String!
+  note: String
+  productId: String
+  quantity: Float!
+  reason: StockExitReason!
+  sku: String!
+  unit: UnitType!
+  user: BasicUser!
+}
+
+enum StockExitReason {
+  DAMAGED
+  EXPIRED
+}
+
+enum UnitType {
+  KILOGRAM
+  PIECE
+}
+
+input UpdateUserInput {
+  active: Boolean
+  email: String!
+  fullName: String!
+  password: String
+  phone: String!
+  role: Role
+}

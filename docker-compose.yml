@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: abr-backend-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: abr_user
+      POSTGRES_PASSWORD: abr_password
+      POSTGRES_DB: abr_local
+    ports:
+      - '5432:5432'
+    volumes:
+      - abr_backend_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U abr_user -d abr_local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  abr_backend_postgres_data:
+    name: abr_backend_postgres_data
