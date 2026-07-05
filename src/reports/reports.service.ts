@@ -8,6 +8,8 @@ import { SaleEntity } from '../sales';
 import { SalesReportRow } from './interfaces';
 
 const groupOptions = ['day', 'month', 'year'] as const;
+const reportTimeZone = 'America/Cancun';
+const reportTimeZoneOffsetMinutes = -300;
 
 type ReportGroup = (typeof groupOptions)[number];
 
@@ -37,8 +39,8 @@ export class ReportsService {
 
     return {
       groupBy,
-      startDate: startDate.toISOString().slice(0, 10),
-      endDate: endDate.toISOString().slice(0, 10),
+      startDate: startDateInput ?? this.toLocalDateInput(startDate),
+      endDate: endDateInput ?? this.toLocalDateInput(endDate),
       summary,
       items,
     };
@@ -51,20 +53,51 @@ export class ReportsService {
   }
 
   private resolveDateRange(startDateInput?: string, endDateInput?: string) {
-    const startDate = startDateInput
-      ? new Date(`${startDateInput}T00:00:00.000`)
-      : new Date(new Date().setHours(0, 0, 0, 0));
+    const today = this.toLocalDateInput(new Date());
+    const startDate = this.getUtcDateFromLocalDate(
+      startDateInput ?? today,
+      0,
+      0,
+      0,
+      0,
+    );
     const endDate = endDateInput
-      ? new Date(`${endDateInput}T23:59:59.999`)
+      ? this.getUtcDateFromLocalDate(endDateInput, 23, 59, 59, 999)
       : new Date();
 
     return { startDate, endDate };
   }
 
   private getPeriodExpression(groupBy: ReportGroup) {
-    if (groupBy === 'year') return `date_trunc('year', sale."createdAt")`;
-    if (groupBy === 'month') return `date_trunc('month', sale."createdAt")`;
-    return `date_trunc('day', sale."createdAt")`;
+    const localCreatedAt = `sale."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE '${reportTimeZone}'`;
+    if (groupBy === 'year') return `date_trunc('year', ${localCreatedAt})`;
+    if (groupBy === 'month') return `date_trunc('month', ${localCreatedAt})`;
+    return `date_trunc('day', ${localCreatedAt})`;
+  }
+
+  private getUtcDateFromLocalDate(
+    dateInput: string,
+    hours: number,
+    minutes: number,
+    seconds: number,
+    milliseconds: number,
+  ) {
+    const [year, month, day] = dateInput.split('-').map(Number);
+    if (!year || !month || !day) return new Date();
+
+    return new Date(
+      Date.UTC(year, month - 1, day, hours, minutes, seconds, milliseconds) -
+        reportTimeZoneOffsetMinutes * 60 * 1000,
+    );
+  }
+
+  private toLocalDateInput(date: Date) {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: reportTimeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
   }
 
   private getSalesReportRows(
@@ -125,7 +158,13 @@ export class ReportsService {
     const salesCount = Number(row.salesCount);
 
     return {
-      period: row.period.toISOString(),
+      period: this.getUtcDateFromLocalDate(
+        row.period.toISOString().slice(0, 10),
+        0,
+        0,
+        0,
+        0,
+      ).toISOString(),
       salesCount,
       canceledCount: Number(row.canceledCount),
       grossTotal,
