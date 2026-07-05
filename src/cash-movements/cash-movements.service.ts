@@ -35,9 +35,19 @@ export class CashMovementsService {
           where: { status: CashRegisterStatus.OPEN },
         })
       : null;
-    const where = currentOnly
-      ? { cashSessionId: openSession?.id ?? '__none__' }
-      : {};
+
+    if (currentOnly && !openSession) {
+      return {
+        items: [],
+        total: 0,
+        page: pagination.page,
+        limit: pagination.limit,
+        pageCount: 1,
+      };
+    }
+
+    const where =
+      currentOnly && openSession ? { cashSessionId: openSession.id } : {};
     const [items, total] = await this.movements.findAndCount({
       where,
       relations: { createdBy: true },
