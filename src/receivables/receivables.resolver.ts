@@ -14,12 +14,14 @@ export class ReceivablesResolver {
     @Args('status', { nullable: true }) statusInput?: string,
     @Args('page', { nullable: true }) page?: number,
     @Args('limit', { nullable: true }) limit?: number,
+    @Args('search', { nullable: true }) search?: string,
   ) {
     return this.receivablesService.receivables(
       context,
       statusInput,
       page,
       limit,
+      search,
     );
   }
 

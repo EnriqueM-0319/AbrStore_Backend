@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { IsNull, Not, Raw, Repository } from 'typeorm';
 import { AuthService } from '../auth/auth.service';
 import { CashMovementEntity } from '../cash-movements';
 import { CashRegisterSessionEntity } from '../cash-register';
@@ -39,12 +39,13 @@ export class ReceivablesService {
     statusInput?: string,
     page?: number,
     limit?: number,
+    search?: string,
   ) {
     await this.authService.requireRole(context, operationalRoles);
     const pagination = getPagination(page, limit);
     const open = await this.findOpenSession();
     const [items, total] = await this.sales.findAndCount({
-      where: this.getReceivablesWhere(statusInput),
+      where: this.getReceivablesWhere(statusInput, search),
       relations: {
         seller: true,
         canceledBy: true,
@@ -117,10 +118,19 @@ export class ReceivablesService {
     });
   }
 
-  private getReceivablesWhere(statusInput?: string) {
+  private getReceivablesWhere(statusInput?: string, search?: string) {
+    const trimmedSearch = search?.trim().slice(0, 80);
+
     return {
       paymentMethod: PaymentMethod.CREDIT,
       canceledAt: IsNull(),
+      ...(trimmedSearch
+        ? {
+            creditCustomerName: Raw((alias) => `LOWER(${alias}) LIKE :search`, {
+              search: `%${trimmedSearch.toLowerCase()}%`,
+            }),
+          }
+        : {}),
       ...(statusInput === 'paid'
         ? { creditPaidAt: Not(IsNull()) }
         : statusInput === 'all'

@@ -229,7 +229,7 @@ type Query {
   manageProducts: [Product!]!
   me: AuthUser!
   products(search: String): [Product!]!
-  receivables(limit: Float, page: Float, status: String): PaginatedSales!
+  receivables(limit: Float, page: Float, search: String, status: String): PaginatedSales!
   sales(endDate: String, folio: Float, limit: Float, page: Float, startDate: String): PaginatedSales!
   salesReport(endDate: String, groupBy: String, startDate: String): SalesReport!
   stockExits(limit: Float, page: Float): PaginatedStockExits!
