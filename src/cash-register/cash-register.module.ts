@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module';
 import { CashMovementEntity } from '../cash-movements';
+import { SaleEntity } from '../sales';
 import { CashRegisterSessionEntity } from './cash-register-session.entity';
 import { CashRegisterResolver } from './cash-register.resolver';
 import { CashRegisterService } from './cash-register.service';
@@ -9,7 +10,11 @@ import { CashRegisterService } from './cash-register.service';
 @Module({
   imports: [
     AuthModule,
-    TypeOrmModule.forFeature([CashRegisterSessionEntity, CashMovementEntity]),
+    TypeOrmModule.forFeature([
+      CashRegisterSessionEntity,
+      CashMovementEntity,
+      SaleEntity,
+    ]),
   ],
   providers: [CashRegisterResolver, CashRegisterService],
   exports: [CashRegisterService],

@@ -7,7 +7,12 @@ import { GraphqlContext } from '../common/interfaces';
 import { money, serializeCashRegisterSession, toNumber } from '../common/utils';
 import { operationalRoles } from '../common/utils';
 import { CashMovementEntity } from '../cash-movements';
-import { CashMovementType, CashRegisterStatus } from '../common/enums';
+import {
+  CashMovementType,
+  CashRegisterStatus,
+  PaymentMethod,
+} from '../common/enums';
+import { SaleEntity } from '../sales';
 import { CashRegisterSessionEntity } from './cash-register-session.entity';
 
 @Injectable()
@@ -17,6 +22,8 @@ export class CashRegisterService {
     private readonly sessions: Repository<CashRegisterSessionEntity>,
     @InjectRepository(CashMovementEntity)
     private readonly movements: Repository<CashMovementEntity>,
+    @InjectRepository(SaleEntity)
+    private readonly sales: Repository<SaleEntity>,
     private readonly authService: AuthService,
   ) {}
 
@@ -93,26 +100,65 @@ export class CashRegisterService {
         .andWhere('movement.type = :type', { type })
         .getRawOne<{ total: string }>()
         .then((row) => Number(row?.total ?? 0));
-    const cashIn = await sum(CashMovementType.CASH_IN);
-    const adjustment = await sum(CashMovementType.ADJUSTMENT);
-    const supplierPayment = await sum(CashMovementType.SUPPLIER_PAYMENT);
-    const withdrawal = await sum(CashMovementType.WITHDRAWAL);
-    const expense = await sum(CashMovementType.EXPENSE);
+    const saleSummary = (paymentMethod: PaymentMethod) =>
+      this.sales
+        .createQueryBuilder('sale')
+        .select(
+          'COALESCE(SUM(COALESCE(sale.paymentTotal, sale.total)), 0)',
+          'total',
+        )
+        .addSelect('COUNT(sale.id)', 'count')
+        .where('sale.cashSessionId = :cashSessionId', {
+          cashSessionId: session.id,
+        })
+        .andWhere('sale.paymentMethod = :paymentMethod', { paymentMethod })
+        .andWhere('sale.canceledAt IS NULL')
+        .getRawOne<{ total: string; count: string }>()
+        .then((row) => ({
+          total: Number(row?.total ?? 0),
+          count: Number(row?.count ?? 0),
+        }));
+    const [
+      cashIn,
+      adjustment,
+      supplierPayment,
+      withdrawal,
+      expense,
+      cashSales,
+      cardSales,
+      transferSales,
+      creditSales,
+    ] = await Promise.all([
+      sum(CashMovementType.CASH_IN),
+      sum(CashMovementType.ADJUSTMENT),
+      sum(CashMovementType.SUPPLIER_PAYMENT),
+      sum(CashMovementType.WITHDRAWAL),
+      sum(CashMovementType.EXPENSE),
+      saleSummary(PaymentMethod.CASH),
+      saleSummary(PaymentMethod.CARD),
+      saleSummary(PaymentMethod.TRANSFER),
+      saleSummary(PaymentMethod.CREDIT),
+    ]);
     const cashOutTotal =
       toNumber(supplierPayment) + toNumber(withdrawal) + toNumber(expense);
+    const nonCashSalesTotal =
+      toNumber(cardSales.total) +
+      toNumber(transferSales.total) +
+      toNumber(creditSales.total);
     const expectedAmount =
       toNumber(session.openingAmount) +
+      toNumber(cashSales.total) +
       toNumber(cashIn) +
       toNumber(adjustment) -
       cashOutTotal;
     return {
       openingAmount: toNumber(session.openingAmount),
-      cashSalesTotal: 0,
-      cashSalesCount: 0,
-      cardSalesTotal: 0,
-      transferSalesTotal: 0,
-      creditSalesTotal: 0,
-      nonCashSalesTotal: 0,
+      cashSalesTotal: toNumber(cashSales.total),
+      cashSalesCount: cashSales.count,
+      cardSalesTotal: toNumber(cardSales.total),
+      transferSalesTotal: toNumber(transferSales.total),
+      creditSalesTotal: toNumber(creditSales.total),
+      nonCashSalesTotal,
       cashInTotal: toNumber(cashIn),
       adjustmentTotal: toNumber(adjustment),
       supplierPaymentTotal: toNumber(supplierPayment),
