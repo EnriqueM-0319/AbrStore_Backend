@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { CashMovementsModule } from './cash-movements/cash-movements.module';
 import { CashRegisterModule } from './cash-register/cash-register.module';
 import { HeldTicketsModule } from './held-tickets/held-tickets.module';
+import { HealthModule } from './health/health.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { ProductsModule } from './products/products.module';
 import { ReceivablesModule } from './receivables/receivables.module';
@@ -19,6 +20,7 @@ import { UsersModule } from './users/users.module';
     appConfigModule,
     graphqlModule,
     databaseModule,
+    HealthModule,
     AuthModule,
     UsersModule,
     ProductsModule,
