@@ -9,4 +9,8 @@ export interface SalesReportRow {
   creditTotal: string | null;
   creditPendingTotal: string | null;
   creditPaidTotal: string | null;
+  creditCollectedCashTotal?: string | null;
+  creditCollectedCardTotal?: string | null;
+  creditCollectedTransferTotal?: string | null;
+  creditCollectedTotal?: string | null;
 }

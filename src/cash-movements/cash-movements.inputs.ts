@@ -12,3 +12,9 @@ export class CreateCashMovementInput {
   @Field()
   description!: string;
 }
+
+@InputType()
+export class UpdateCashMovementInput {
+  @Field(() => Float)
+  amount!: number;
+}

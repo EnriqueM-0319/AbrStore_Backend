@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -13,6 +14,7 @@ import { UserEntity } from '../users';
 import { HeldTicketItemEntity } from './held-ticket-item.entity';
 
 @Entity('held_tickets')
+@Index(['cashSessionId', 'updatedAt'])
 export class HeldTicketEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

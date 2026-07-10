@@ -1,7 +1,10 @@
 import { Args, Context, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { GraphqlContext } from '../common/interfaces';
 import { CashMovement, PaginatedCashMovements } from './dto';
-import { CreateCashMovementInput } from './cash-movements.inputs';
+import {
+  CreateCashMovementInput,
+  UpdateCashMovementInput,
+} from './cash-movements.inputs';
 import { CashMovementsService } from './cash-movements.service';
 
 @Resolver()
@@ -29,5 +32,14 @@ export class CashMovementsResolver {
     @Args('input') input: CreateCashMovementInput,
   ) {
     return this.cashMovementsService.create(context, input);
+  }
+
+  @Mutation(() => CashMovement)
+  updateCashMovement(
+    @Context() context: GraphqlContext,
+    @Args('id') id: string,
+    @Args('input') input: UpdateCashMovementInput,
+  ) {
+    return this.cashMovementsService.update(context, id, input);
   }
 }

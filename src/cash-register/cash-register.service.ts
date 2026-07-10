@@ -100,45 +100,25 @@ export class CashRegisterService {
         .andWhere('movement.type = :type', { type })
         .getRawOne<{ total: string }>()
         .then((row) => Number(row?.total ?? 0));
-    const saleSummary = (paymentMethod: PaymentMethod) =>
-      this.sales
-        .createQueryBuilder('sale')
-        .select(
-          'COALESCE(SUM(COALESCE(sale.paymentTotal, sale.total)), 0)',
-          'total',
-        )
-        .addSelect('COUNT(sale.id)', 'count')
-        .where('sale.cashSessionId = :cashSessionId', {
-          cashSessionId: session.id,
-        })
-        .andWhere('sale.paymentMethod = :paymentMethod', { paymentMethod })
-        .andWhere('sale.canceledAt IS NULL')
-        .getRawOne<{ total: string; count: string }>()
-        .then((row) => ({
-          total: Number(row?.total ?? 0),
-          count: Number(row?.count ?? 0),
-        }));
     const [
       cashIn,
       adjustment,
       supplierPayment,
       withdrawal,
       expense,
-      cashSales,
-      cardSales,
-      transferSales,
-      creditSales,
+      salesByPaymentMethod,
     ] = await Promise.all([
       sum(CashMovementType.CASH_IN),
       sum(CashMovementType.ADJUSTMENT),
       sum(CashMovementType.SUPPLIER_PAYMENT),
       sum(CashMovementType.WITHDRAWAL),
       sum(CashMovementType.EXPENSE),
-      saleSummary(PaymentMethod.CASH),
-      saleSummary(PaymentMethod.CARD),
-      saleSummary(PaymentMethod.TRANSFER),
-      saleSummary(PaymentMethod.CREDIT),
+      this.getSalesByPaymentMethod(session.id),
     ]);
+    const cashSales = salesByPaymentMethod[PaymentMethod.CASH];
+    const cardSales = salesByPaymentMethod[PaymentMethod.CARD];
+    const transferSales = salesByPaymentMethod[PaymentMethod.TRANSFER];
+    const creditSales = salesByPaymentMethod[PaymentMethod.CREDIT];
     const cashOutTotal =
       toNumber(supplierPayment) + toNumber(withdrawal) + toNumber(expense);
     const nonCashSalesTotal =
@@ -167,5 +147,33 @@ export class CashRegisterService {
       cashOutTotal,
       expectedAmount,
     };
+  }
+
+  private async getSalesByPaymentMethod(cashSessionId: string) {
+    const emptySummary = { total: 0, count: 0 };
+    const summary: Record<PaymentMethod, { total: number; count: number }> = {
+      [PaymentMethod.CASH]: { ...emptySummary },
+      [PaymentMethod.CARD]: { ...emptySummary },
+      [PaymentMethod.TRANSFER]: { ...emptySummary },
+      [PaymentMethod.CREDIT]: { ...emptySummary },
+    };
+    const rows = await this.sales
+      .createQueryBuilder('sale')
+      .select('sale.paymentMethod', 'paymentMethod')
+      .addSelect('COALESCE(SUM(COALESCE(sale.paymentTotal, sale.total)), 0)', 'total')
+      .addSelect('COUNT(sale.id)', 'count')
+      .where('sale.cashSessionId = :cashSessionId', { cashSessionId })
+      .andWhere('sale.canceledAt IS NULL')
+      .groupBy('sale.paymentMethod')
+      .getRawMany<{ paymentMethod: PaymentMethod; total: string; count: string }>();
+
+    for (const row of rows) {
+      summary[row.paymentMethod] = {
+        total: Number(row.total ?? 0),
+        count: Number(row.count ?? 0),
+      };
+    }
+
+    return summary;
   }
 }

@@ -143,6 +143,7 @@ type Mutation {
   openCashRegister(input: OpenCashRegisterInput!): CashRegisterSession!
   payReceivable(cashReceived: Float, id: String!, paymentMethod: PaymentMethod): SaleTicket!
   registerUser(input: RegisterUserInput!): AuthUser!
+  updateCashMovement(id: String!, input: UpdateCashMovementInput!): CashMovement!
   updateProduct(id: String!, input: ProductInput!): Product!
   updateUser(id: String!, input: UpdateUserInput!): AuthUser!
 }
@@ -220,6 +221,33 @@ input ProductInput {
   unit: UnitType!
 }
 
+type ProductSalesPeriodReportItem {
+  period: String!
+  quantity: Float!
+  total: Float!
+}
+
+type ProductSalesReport {
+  endDate: String!
+  groupBy: String!
+  items: [ProductSalesReportItem!]!
+  lowestProduct: ProductSalesReportItem
+  periodItems: [ProductSalesPeriodReportItem!]!
+  startDate: String!
+  topProduct: ProductSalesReportItem
+  totalAmount: Float!
+  totalQuantity: Float!
+}
+
+type ProductSalesReportItem {
+  name: String!
+  productId: String
+  quantity: Float!
+  share: Float!
+  sku: String!
+  total: Float!
+}
+
 type Query {
   cashMovements(currentOnly: Boolean, limit: Float, page: Float): PaginatedCashMovements!
   cashRegisterSummary: CashRegisterSummary
@@ -228,6 +256,7 @@ type Query {
   inventory(limit: Float, lowStock: Boolean, page: Float, search: String): PaginatedProducts!
   manageProducts: [Product!]!
   me: AuthUser!
+  productSalesReport(endDate: String, groupBy: String, limit: Int, startDate: String): ProductSalesReport!
   products(search: String): [Product!]!
   receivables(limit: Float, page: Float, search: String, status: String): PaginatedSales!
   sales(endDate: String, folio: Float, limit: Float, page: Float, startDate: String): PaginatedSales!
@@ -351,6 +380,10 @@ enum StockExitReason {
 enum UnitType {
   KILOGRAM
   PIECE
+}
+
+input UpdateCashMovementInput {
+  amount: Float!
 }
 
 input UpdateUserInput {

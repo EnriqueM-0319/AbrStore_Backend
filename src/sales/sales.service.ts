@@ -15,20 +15,19 @@ import {
 } from '../common/utils';
 import { operationalRoles } from '../common/utils';
 import { CashRegisterSessionEntity } from '../cash-register';
-import { ProductEntity } from '../products';
+import { ProductEntity, ProductStockService } from '../products';
 import { SaleEntity, SaleItemEntity } from './index';
 import { CashRegisterStatus, PaymentMethod, UnitType } from '../common/enums';
-import { CreateSaleInput } from './sales.inputs';
+import { CreateSaleInput, SaleRequestItemInput } from './sales.inputs';
 
 @Injectable()
 export class SalesService {
   constructor(
     @InjectRepository(SaleEntity)
     private readonly salesRepository: Repository<SaleEntity>,
-    @InjectRepository(ProductEntity)
-    private readonly products: Repository<ProductEntity>,
     @InjectRepository(CashRegisterSessionEntity)
     private readonly sessions: Repository<CashRegisterSessionEntity>,
+    private readonly productStockService: ProductStockService,
     private readonly authService: AuthService,
   ) {}
 
@@ -96,61 +95,8 @@ export class SalesService {
       throw new AppError('Agrega al menos un producto para cobrar la venta.');
 
     const paymentMethod = input.paymentMethod ?? PaymentMethod.CASH;
-    const saleItems: SaleItemEntity[] = [];
-    let total = 0;
-    let itemCount = 0;
-
-    for (const requestItem of input.items) {
-      if (requestItem.manual) {
-        const price = Number(requestItem.price);
-        if (!requestItem.name || !Number.isFinite(price) || price <= 0)
-          throw new AppError('Revisa las cantidades de la venta.');
-        const item = new SaleItemEntity();
-        item.productId = null;
-        item.sku = 'SIN-CODIGO';
-        item.name = requestItem.name.trim().slice(0, 80);
-        item.description = 'Venta sin código';
-        item.unit = requestItem.unit ?? UnitType.PIECE;
-        item.quantity = '1';
-        item.unitPrice = money(price);
-        item.lineTotal = money(price);
-        saleItems.push(item);
-        total += price;
-        itemCount += 1;
-        continue;
-      }
-
-      const product = await this.products.findOne({
-        where: { id: requestItem.productId, active: true },
-      });
-      const qty = Number(requestItem.quantity);
-      if (!product || !Number.isFinite(qty) || qty <= 0)
-        throw new AppError('Revisa las cantidades de la venta.');
-      if (product.unit === UnitType.PIECE && !Number.isInteger(qty))
-        throw new AppError(`${product.name} solo se puede vender por pieza.`);
-      if (toNumber(product.stock) < qty)
-        throw new AppError(
-          `${product.name} no tiene existencias suficientes.`,
-          HttpStatus.CONFLICT,
-        );
-
-      product.stock = quantity(toNumber(product.stock) - qty, product.unit);
-      await this.products.save(product);
-      const lineTotal = toNumber(product.price) * qty;
-      const item = new SaleItemEntity();
-      item.productId = product.id;
-      item.product = product;
-      item.sku = product.sku;
-      item.name = product.name;
-      item.description = product.description;
-      item.unit = product.unit;
-      item.quantity = quantity(qty, product.unit);
-      item.unitPrice = product.price;
-      item.lineTotal = money(lineTotal);
-      saleItems.push(item);
-      total += lineTotal;
-      itemCount += qty;
-    }
+    const { saleItems, total, itemCount, productsToUpdate } =
+      await this.buildSaleItems(input.items);
 
     if (
       paymentMethod === PaymentMethod.CREDIT &&
@@ -194,7 +140,85 @@ export class SalesService {
       items: saleItems,
     });
 
+    await this.productStockService.saveProducts(productsToUpdate);
     return serializeSale(await this.salesRepository.save(sale));
+  }
+
+  private async buildSaleItems(requestItems: SaleRequestItemInput[]) {
+    const productIds = requestItems
+      .filter((item) => !item.manual && item.productId)
+      .map((item) => item.productId as string);
+    const products = await this.productStockService.getActiveProductsByIds(
+      productIds,
+    );
+    const saleItems: SaleItemEntity[] = [];
+    const productsToUpdate: ProductEntity[] = [];
+    let total = 0;
+    let itemCount = 0;
+
+    for (const requestItem of requestItems) {
+      if (requestItem.manual) {
+        const item = this.createManualSaleItem(requestItem);
+        saleItems.push(item);
+        total += toNumber(item.lineTotal);
+        itemCount += 1;
+        continue;
+      }
+
+      const product = requestItem.productId
+        ? products.get(requestItem.productId)
+        : null;
+      if (!product) throw new AppError('Revisa las cantidades de la venta.');
+
+      const quantityValue = Number(requestItem.quantity);
+      this.productStockService.ensureSellableQuantity(product, quantityValue);
+      this.productStockService.decreaseStock(product, quantityValue);
+      productsToUpdate.push(product);
+
+      const lineTotal = toNumber(product.price) * quantityValue;
+      saleItems.push(
+        this.createProductSaleItem(product, quantityValue, lineTotal),
+      );
+      total += lineTotal;
+      itemCount += quantityValue;
+    }
+
+    return { saleItems, total, itemCount, productsToUpdate };
+  }
+
+  private createManualSaleItem(requestItem: SaleRequestItemInput) {
+    const price = Number(requestItem.price);
+    if (!requestItem.name || !Number.isFinite(price) || price <= 0)
+      throw new AppError('Revisa las cantidades de la venta.');
+
+    const item = new SaleItemEntity();
+    item.productId = null;
+    item.sku = 'SIN-CODIGO';
+    item.name = requestItem.name.trim().slice(0, 80);
+    item.description = 'Venta sin código';
+    item.unit = requestItem.unit ?? UnitType.PIECE;
+    item.quantity = '1';
+    item.unitPrice = money(price);
+    item.lineTotal = money(price);
+    return item;
+  }
+
+  private createProductSaleItem(
+    product: ProductEntity,
+    quantityValue: number,
+    lineTotal: number,
+  ) {
+    const item = new SaleItemEntity();
+    item.productId = product.id;
+    item.product = product;
+    item.sku = product.sku;
+    item.name = product.name;
+    item.description = product.description;
+    item.unit = product.unit;
+    item.quantity = quantity(quantityValue, product.unit);
+    item.unitPrice = product.price;
+    item.lineTotal = money(lineTotal);
+    return item;
   }
 
   async cancelSale(context: GraphqlContext, id: string, reasonInput: string) {
@@ -237,11 +261,10 @@ export class SalesService {
 
     for (const item of sale.items ?? []) {
       if (item.canceledAt || !item.product) continue;
-      item.product.stock = quantity(
-        toNumber(item.product.stock) + toNumber(item.quantity),
-        item.product.unit,
+      this.productStockService.increaseStock(
+        item.product,
+        toNumber(item.quantity),
       );
-      await this.products.save(item.product);
     }
 
     sale.canceledAt = new Date();
@@ -249,6 +272,11 @@ export class SalesService {
     sale.canceledBy = user;
     sale.cancelReason = reason;
 
+    await this.productStockService.saveProducts(
+      (sale.items ?? [])
+        .map((item) => item.product)
+        .filter((product): product is ProductEntity => Boolean(product)),
+    );
     return serializeSale(await this.salesRepository.save(sale));
   }
 
@@ -311,11 +339,11 @@ export class SalesService {
     }
 
     if (itemToCancel.product) {
-      itemToCancel.product.stock = quantity(
-        toNumber(itemToCancel.product.stock) + toNumber(itemToCancel.quantity),
-        itemToCancel.product.unit,
+      this.productStockService.increaseStock(
+        itemToCancel.product,
+        toNumber(itemToCancel.quantity),
       );
-      await this.products.save(itemToCancel.product);
+      await this.productStockService.saveProducts([itemToCancel.product]);
     }
 
     itemToCancel.canceledAt = new Date();

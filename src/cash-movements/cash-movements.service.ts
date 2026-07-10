@@ -10,7 +10,12 @@ import { operationalRoles } from '../common/utils';
 import { CashMovementEntity } from './cash-movement.entity';
 import { CashRegisterSessionEntity } from '../cash-register';
 import { CashRegisterStatus } from '../common/enums';
-import { CreateCashMovementInput } from './cash-movements.inputs';
+import {
+  CreateCashMovementInput,
+  UpdateCashMovementInput,
+} from './cash-movements.inputs';
+
+const receivablePaymentDescriptionPrefix = 'Pago de cuenta por cobrar';
 
 @Injectable()
 export class CashMovementsService {
@@ -92,5 +97,46 @@ export class CashMovementsService {
       description: input.description.trim(),
     });
     return serializeCashMovement(await this.movements.save(movement));
+  }
+
+  async update(
+    context: GraphqlContext,
+    id: string,
+    input: UpdateCashMovementInput,
+  ) {
+    await this.authService.requireRole(context, operationalRoles);
+    if (!id || !Number.isFinite(input.amount) || input.amount <= 0) {
+      throw new AppError('Ingresa un monto válido.');
+    }
+
+    const openSession = await this.sessions.findOne({
+      where: { status: CashRegisterStatus.OPEN },
+    });
+    if (!openSession) {
+      throw new AppError(
+        'Debes tener una caja abierta para editar movimientos.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const movement = await this.movements.findOne({
+      where: { id, cashSessionId: openSession.id },
+      relations: { createdBy: true },
+    });
+    if (!movement) {
+      throw new AppError('No encontramos este movimiento en la caja actual.');
+    }
+    if (this.isReceivablePaymentMovement(movement)) {
+      throw new AppError(
+        'No puedes editar cobros de cuentas pagadas desde movimientos de caja.',
+      );
+    }
+
+    movement.amount = money(input.amount);
+    return serializeCashMovement(await this.movements.save(movement));
+  }
+
+  private isReceivablePaymentMovement(movement: CashMovementEntity) {
+    return movement.description.startsWith(receivablePaymentDescriptionPrefix);
   }
 }

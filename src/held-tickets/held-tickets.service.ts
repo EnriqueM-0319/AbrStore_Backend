@@ -13,7 +13,7 @@ import {
   serializeHeldTicket,
   toNumber,
 } from '../common/utils';
-import { ProductEntity } from '../products';
+import { ProductEntity, ProductStockService } from '../products';
 import { CreateSaleInput } from '../sales/sales.inputs';
 import { HeldTicketEntity, HeldTicketItemEntity } from './index';
 
@@ -22,10 +22,9 @@ export class HeldTicketsService {
   constructor(
     @InjectRepository(HeldTicketEntity)
     private readonly tickets: Repository<HeldTicketEntity>,
-    @InjectRepository(ProductEntity)
-    private readonly products: Repository<ProductEntity>,
     @InjectRepository(CashRegisterSessionEntity)
     private readonly sessions: Repository<CashRegisterSessionEntity>,
+    private readonly productStockService: ProductStockService,
     private readonly authService: AuthService,
   ) {}
 
@@ -57,7 +56,8 @@ export class HeldTicketsService {
     if (!input.items?.length)
       throw new AppError('Agrega productos antes de guardar el ticket.');
 
-    const { items, total, itemCount } = await this.buildTicketItems(input);
+    const { items, total, itemCount, productsToUpdate } =
+      await this.buildTicketItems(input);
     const ticket = this.tickets.create({
       note: note?.trim().slice(0, 120) || null,
       paymentMethod: this.resolvePaymentMethod(input.paymentMethod),
@@ -69,6 +69,7 @@ export class HeldTicketsService {
       items,
     });
 
+    await this.productStockService.saveProducts(productsToUpdate);
     return serializeHeldTicket(await this.tickets.save(ticket));
   }
 
@@ -81,20 +82,18 @@ export class HeldTicketsService {
 
     if (!ticket) throw new AppError('No encontramos el ticket guardado.');
 
+    const productIds = (ticket.items ?? [])
+      .map((item) => item.productId)
+      .filter((id): id is string => Boolean(id));
+    const products = await this.productStockService.getProductsByIds(productIds);
     for (const item of ticket.items ?? []) {
       if (!item.productId) continue;
-      const product = await this.products.findOne({
-        where: { id: item.productId },
-      });
-      if (product) {
-        product.stock = quantity(
-          toNumber(product.stock) + toNumber(item.quantity),
-          product.unit,
-        );
-        await this.products.save(product);
-      }
+      const product = products.get(item.productId);
+      if (!product) continue;
+      this.productStockService.increaseStock(product, toNumber(item.quantity));
     }
 
+    await this.productStockService.saveProducts([...products.values()]);
     await this.tickets.remove(ticket);
     return { ok: true };
   }
@@ -106,7 +105,14 @@ export class HeldTicketsService {
   }
 
   private async buildTicketItems(input: CreateSaleInput) {
+    const productIds = input.items
+      .filter((item) => !item.manual && item.productId)
+      .map((item) => item.productId as string);
+    const products = await this.productStockService.getActiveProductsByIds(
+      productIds,
+    );
     const items: HeldTicketItemEntity[] = [];
+    const productsToUpdate: ProductEntity[] = [];
     let total = 0;
     let itemCount = 0;
 
@@ -119,13 +125,18 @@ export class HeldTicketsService {
         continue;
       }
 
-      const productItem = await this.createProductItem(requestItem);
+      const product = requestItem.productId
+        ? products.get(requestItem.productId)
+        : null;
+      if (!product) throw new AppError('Revisa las cantidades del ticket.');
+      const productItem = this.createProductItem(requestItem, product);
       items.push(productItem.item);
+      productsToUpdate.push(product);
       total += productItem.lineTotal;
       itemCount += productItem.quantity;
     }
 
-    return { items, total, itemCount };
+    return { items, total, itemCount, productsToUpdate };
   }
 
   private createManualItem(requestItem: CreateSaleInput['items'][number]) {
@@ -145,26 +156,14 @@ export class HeldTicketsService {
     return item;
   }
 
-  private async createProductItem(
+  private createProductItem(
     requestItem: CreateSaleInput['items'][number],
+    product: ProductEntity,
   ) {
-    const product = await this.products.findOne({
-      where: { id: requestItem.productId, active: true },
-    });
     const quantityValue = Number(requestItem.quantity);
 
-    if (!product || !Number.isFinite(quantityValue) || quantityValue <= 0)
-      throw new AppError('Revisa las cantidades del ticket.');
-    if (toNumber(product.stock) < quantityValue)
-      throw new AppError(
-        `${product.name} no tiene existencias suficientes para apartar.`,
-      );
-
-    product.stock = quantity(
-      toNumber(product.stock) - quantityValue,
-      product.unit,
-    );
-    await this.products.save(product);
+    this.productStockService.ensureSellableQuantity(product, quantityValue);
+    this.productStockService.decreaseStock(product, quantityValue);
 
     const lineTotal = toNumber(product.price) * quantityValue;
     const item = new HeldTicketItemEntity();

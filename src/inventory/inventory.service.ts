@@ -45,7 +45,9 @@ export class InventoryService {
       query.andWhere('product.active = true AND product.stock <= 5');
 
     const [items, total] = await query
-      .orderBy('product.sku', 'ASC')
+      .orderBy('product.stock', 'ASC')
+      .addOrderBy('product.name', 'ASC')
+      .addOrderBy('product.sku', 'ASC')
       .skip(skip)
       .take(limit)
       .getManyAndCount();

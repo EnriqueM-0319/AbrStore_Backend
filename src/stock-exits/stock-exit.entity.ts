@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -10,6 +11,8 @@ import { StockExitReason, UnitType } from '../common/enums';
 import { UserEntity } from '../users';
 
 @Entity('stock_exits')
+@Index(['createdAt'])
+@Index(['productId', 'createdAt'])
 export class StockExitEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

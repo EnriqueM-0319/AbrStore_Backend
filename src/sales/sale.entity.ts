@@ -15,6 +15,9 @@ import { SaleItemEntity } from './sale-item.entity';
 
 @Entity('sales')
 @Index(['createdAt'])
+@Index(['cashSessionId', 'createdAt'])
+@Index(['canceledAt', 'createdAt'])
+@Index(['creditPaidAt'])
 @Index(['paymentMethod', 'createdAt'])
 export class SaleEntity {
   @PrimaryGeneratedColumn('uuid')
