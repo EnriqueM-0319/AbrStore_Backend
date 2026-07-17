@@ -1,0 +1,15 @@
+[Unit]
+Description=ABR Backend NestJS API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/var/www/abr-backend
+EnvironmentFile=/var/www/abr-backend/.env
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

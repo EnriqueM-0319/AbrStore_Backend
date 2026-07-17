@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.git
+.env
+.env.*
+npm-debug.log
+Dockerfile
+docker-compose.yml
+compose.yaml
+README.md
+DEPLOY_BACKEND_ORACLE.md
+deploy
